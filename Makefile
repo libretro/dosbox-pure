@@ -196,7 +196,13 @@ else
   LDFLAGS  += -O2
 endif
 
-CFLAGS  += $(CPUFLAGS) -std=gnu++11 -fpic -fomit-frame-pointer -fno-exceptions -fno-non-call-exceptions -Wno-address-of-packed-member -Wno-format -Wno-switch
+CFLAGS  += $(CPUFLAGS) -std=gnu++11 -fomit-frame-pointer -fno-exceptions -fno-non-call-exceptions -Wno-address-of-packed-member -Wno-format -Wno-switch
+ifneq ($(STATIC_LINKING), 1)
+  CFLAGS  += -fpic
+else
+  CFLAGS  += -DSTATIC_LINKING
+endif
+
 CFLAGS  += -fvisibility=hidden -ffunction-sections
 CFLAGS  += -D__LIBRETRO__ -Iinclude -D_FILE_OFFSET_BITS=64
 CFLAGS  += $(COMMONFLAGS)
