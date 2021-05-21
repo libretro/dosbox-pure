@@ -192,7 +192,11 @@ else ifeq ($(BUILD),ASAN)
 else
   BUILD    := RELEASE
   BUILDDIR := release
-  CFLAGS   := -DNDEBUG -O2 -fno-ident
+  ifeq ($(platform),vita)
+    CFLAGS   := -DNDEBUG -O3 -fno-ident -fno-partial-inlining
+  else
+    CFLAGS   := -DNDEBUG -O2 -fno-ident
+  endif
   LDFLAGS  += -O2
 endif
 
