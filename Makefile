@@ -129,7 +129,8 @@ else ifeq ($(platform),libnx)
   export DEPSDIR = $(CURDIR)
   include $(DEVKITPRO)/libnx/switch_rules
   COMMONFLAGS += -I$(LIBNX)/include/ -ftls-model=local-exec -specs=$(LIBNX)/switch.specs
-  COMMONFLAGS += $(INCLUDE) -D__SWITCH__ -DHAVE_LIBNX
+  COMMONFLAGS += $(INCLUDE) -D__SWITCH__ -DHAVE_LIBNX -fPIE  -ffunction-sections -fdata-sections -march=armv8-a -mtune=cortex-a57 -mtp=soft
+  COMMONFLAGS += -fPIC -fPIE
   STATIC_LINKING = 1
 else ifeq ($(platform),gcw0)
   # You must used the toolchain built on or around 2014-08-20
@@ -216,6 +217,7 @@ endif
 CFLAGS  += -fvisibility=hidden -ffunction-sections
 CFLAGS  += -D__LIBRETRO__ -Iinclude -D_FILE_OFFSET_BITS=64
 CFLAGS  += $(COMMONFLAGS)
+CXXFLAGS  += $(COMMONFLAGS)
 #CFLAGS  += -fdata-sections #saves around 32 bytes on most platforms but wrongfully adds up to 60MB on msys2
 
 LDLIBS  := -lpthread
