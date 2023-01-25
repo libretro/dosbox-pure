@@ -150,7 +150,6 @@ else ifneq ($(findstring Haiku,$(shell uname -s)),)
 else ifeq ($(platform), emscripten)
   EXT?=bc
   TARGET := $(TARGET_NAME)_libretro_$(platform).$(EXT)
-  COMMONFLAGS += -pthread
   STATIC_LINKING = 1
   OUTNAME := dosbox_pure_libretro_emscripten.bc
 else
