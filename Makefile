@@ -152,6 +152,8 @@ else ifeq ($(platform), emscripten)
   TARGET := $(TARGET_NAME)_libretro_$(platform).$(EXT)
   STATIC_LINKING = 1
   OUTNAME := dosbox_pure_libretro_emscripten.bc
+  COMMONFLAGS += -pthread
+  HAVE_THREADS = 1
 else
   OUTNAME := dosbox_pure_libretro.so
   CXX     ?= g++
