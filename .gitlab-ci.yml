@@ -75,6 +75,11 @@ include:
   - project: 'libretro-infrastructure/ci-templates'
     file: '/tvos-arm64.yml'
 
+################################## WEB ################################
+  # emscripten
+  - project: 'libretro-infrastructure/ci-templates'
+    file: '/emscripten-static.yml'
+
 ##############################################################################
 #################################### STAGES ##################################
 ##############################################################################
@@ -208,4 +213,11 @@ libretro-build-dingux-mips32:
 libretro-build-dingux-odbeta-mips32:
   extends:
     - .libretro-dingux-odbeta-mips32-make-default
+    - .core-defs
+
+#################################### WEB #################################
+# emscripten
+libretro-build-emscripten:
+  extends:
+    - .libretro-emscripten-static-retroarch-master
     - .core-defs
