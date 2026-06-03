@@ -580,6 +580,11 @@ static void SDLCALL
 void
 #endif
 MIXER_CallBack(void * /*userdata*/, uint8_t *stream, int len) {
+	/* An empty buffer (len==0) makes need==0, so `index_add % need` below is a
+	 * modulo-by-zero (undefined behavior) -- observed to miscompile into an
+	 * out-of-bounds store under clang -O2 on arm64 (SIGSEGV during boot on
+	 * locally-built cores). There is nothing to mix into an empty buffer anyway. */
+	if (len <= 0) return;
 	Bitu need=(Bitu)len/MIXER_SSIZE;
 	Bit16s * output=(Bit16s *)stream;
 	Bitu reduce;
