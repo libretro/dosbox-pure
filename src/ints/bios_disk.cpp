@@ -142,7 +142,7 @@ struct differencingDisk
 		{
 			if (!saveFile && !savePath.empty())
 			{
-				saveFile = fopen(savePath.c_str(), "wb+");
+				saveFile = fopen_wrap(savePath.c_str(), "wb+");
 				if (saveFile) { fwrite("FFDD\x1", 5, 1, saveFile); saveEndCursor = 5; };
 				savePath.clear();
 			}
