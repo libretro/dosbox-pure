@@ -3865,10 +3865,68 @@ wchar_t* AllocUTF8ToUTF16(const char *str)
 #ifndef S_ISDIR
 #define S_ISDIR(m) (((m)&S_IFMT)==S_IFDIR)
 #endif
+#elif !defined(DBP_STANDALONE) && (defined(__ANDROID__) || defined(__BIONIC__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__GLIBC__))
+#define DBP_USE_VFSIO
+struct VFSIO
+{
+	static retro_vfs_interface* vfsi;
+	#if defined(__ANDROID__) || defined(__BIONIC__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) // bionic is the name of Android's C library
+	static int Read(void* c, char* buf, int size)        { return (int)vfsi->read((retro_vfs_file_handle*)c, buf, (uint64_t)size); }
+	static int Write(void* c, const char* buf, int size) { return (int)vfsi->write((retro_vfs_file_handle*)c, buf, (uint64_t)size); }
+	static fpos_t Seek(void* c, fpos_t off, int whence) // handles both seek and tell
+	{
+		// Android: Building against API >= 24 with -D_FILE_OFFSET_BITS=64 in the global CFLAGS would transparently enable support for files larger than 2GB even on 32-bit hardware (for both VFSIO and STDIO)
+		static_assert(sizeof(fpos_t) == sizeof(off_t), "Our fseek_wrap uses fseeko with off_t, it is assumed that off_t and fpos_t are of equal size where funopen is available");
+		const int vfsseekpos = (whence == SEEK_SET) ? RETRO_VFS_SEEK_POSITION_START : (whence == SEEK_CUR) ? RETRO_VFS_SEEK_POSITION_CURRENT : RETRO_VFS_SEEK_POSITION_END;
+		const int64_t res = (!off && whence == SEEK_CUR) ? (int64_t)0 : vfsi->seek((retro_vfs_file_handle*)c, (int64_t)off, vfsseekpos);
+		return (fpos_t)(res ? res : vfsi->tell((retro_vfs_file_handle*)c)); // handle wrapped tell and front-ends where seek returns the position
+	}
+	#else
+	static ssize_t Read(void* c, char* buf, size_t size)        { return (ssize_t)vfsi->read((retro_vfs_file_handle*)c, buf, (uint64_t)size); }
+	static ssize_t Write(void* c, const char* buf, size_t size) { return (ssize_t)vfsi->write((retro_vfs_file_handle*)c, buf, (uint64_t)size); }
+	static int Seek(void* c, off64_t* off, int whence) // handles both seek and tell
+	{
+		const int vfsseekpos = (whence == SEEK_SET) ? RETRO_VFS_SEEK_POSITION_START : (whence == SEEK_CUR) ? RETRO_VFS_SEEK_POSITION_CURRENT : RETRO_VFS_SEEK_POSITION_END;
+		const int64_t res = (!*off && whence == SEEK_CUR) ? (int64_t)0 : vfsi->seek((retro_vfs_file_handle*)c, (int64_t)*off, vfsseekpos);
+		return ((*off = (off64_t)(res ? res : vfsi->tell((retro_vfs_file_handle*)c))) < 0 ? -1 : 0); // handle wrapped tell and front-ends where seek returns the position
+	}
+	#endif
+	static int Close(void* c) { return vfsi->close((retro_vfs_file_handle*)c); }
+	static FILE* Open(const char* path, const char* mode)
+	{
+		if (!vfsi) { retro_vfs_interface_info vfs = { 1, NULL }; if (!environ_cb || !environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs) || !vfs.iface) { return NULL; } vfsi = vfs.iface; }
+		const bool ma = !!strchr(mode, 'a'), mw = !!strchr(mode, 'w'), mplus = !!strchr(mode, '+'); // Map "a" to RWU, "r+" to RWU, "r" to R, "w+" to RW and "w" to W
+		const unsigned vfsmode = ma ? (RETRO_VFS_FILE_ACCESS_READ_WRITE | RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING) : mw ? (mplus ? RETRO_VFS_FILE_ACCESS_READ_WRITE : RETRO_VFS_FILE_ACCESS_WRITE) : mplus ? (RETRO_VFS_FILE_ACCESS_READ_WRITE | RETRO_VFS_FILE_ACCESS_UPDATE_EXISTING) : RETRO_VFS_FILE_ACCESS_READ;
+		retro_vfs_file_handle* fh = vfsi->open(path, vfsmode, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+		if (ma && fh) vfsi->seek(fh, 0, RETRO_VFS_SEEK_POSITION_END); // for append, place write cursor at end
+		else if (ma) fh = vfsi->open(path, RETRO_VFS_FILE_ACCESS_WRITE, RETRO_VFS_FILE_ACCESS_HINT_NONE); // append try open new file
+		if (!fh) return NULL;
+		#if defined(__ANDROID__) || defined(__BIONIC__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) // bionic is the name of Android's C library
+		FILE *f = funopen(fh, Read, Write, Seek, Close);
+		#else
+		static const cookie_io_functions_t cookiefuncs = { Read, Write, Seek, Close };
+		FILE* f = fopencookie(fh, mode, cookiefuncs);
+		#endif
+		if (!f) vfsi->close(fh);
+		return f;
+	}
+	static bool Exists(const char* path, bool* out_is_dir)
+	{
+		if (!vfsi) { retro_vfs_interface_info vfs = { 1, NULL }; if (!environ_cb || !environ_cb(RETRO_ENVIRONMENT_GET_VFS_INTERFACE, &vfs) || !vfs.iface) { return false; } vfsi = vfs.iface; }
+		if (retro_vfs_file_handle* fh = vfsi->open(path, RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE)) { vfsi->close(fh); if (out_is_dir) *out_is_dir = false; return true; }
+		if (retro_vfs_dir_handle *dh = vfsi->opendir(path, false)) { vfsi->closedir(dh); if (out_is_dir) *out_is_dir = true; return true; }
+		return false;
+	}
+	static inline bool Use(const char* p) { if (*p == '/') { return false; } while (*(p++)) { if (*p == '/') { return (p[-1] == ':' && p[1] == '/'); } } return false; }
+};
+retro_vfs_interface* VFSIO::vfsi;
 #endif
 
 FILE* fopen_wrap(const char* path, const char* mode)
 {
+	#ifdef DBP_USE_VFSIO
+	if (VFSIO::Use(path)) return VFSIO::Open(path, mode);
+	#endif
 	#ifdef WIN32
 	for (const char* p = path; *p; p++) { if ((Bit8u)*p > 0x7F) goto needw; }
 	#endif
@@ -3887,6 +3945,9 @@ FILE* fopen_wrap(const char* path, const char* mode)
 
 static bool exists_utf8(const char* path, bool* out_is_dir)
 {
+	#ifdef DBP_USE_VFSIO
+	if (VFSIO::Use(path)) return VFSIO::Exists(path, out_is_dir); // handle Android storage access framework
+	#endif
 	#ifdef WIN32
 	for (const char* p = path; *p; p++) { if ((Bit8u)*p > 0x7F) goto needw; }
 	#endif
