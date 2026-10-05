@@ -125,15 +125,21 @@ void CPU_Core_Dynrec_Cache_Close(void);
 void Descriptor::Load(PhysPt address) {
 	cpu.mpl=0;
 	Bit32u* data = (Bit32u*)&saved;
-	*data	  = mem_readd(address);
-	*(data+1) = mem_readd(address+4);
+	//DBP: Changed to use mem_readd_inline
+	//*data	  = mem_readd(address);
+	//*(data+1) = mem_readd(address+4);
+	*data	  = mem_readd_inline(address);
+	*(data+1) = mem_readd_inline(address+4);
 	cpu.mpl=3;
 }
 void Descriptor:: Save(PhysPt address) {
 	cpu.mpl=0;
 	Bit32u* data = (Bit32u*)&saved;
-	mem_writed(address,*data);
-	mem_writed(address+4,*(data+1));
+	//DBP: Changed to use mem_writed_inline
+	//mem_writed(address,*data);
+	//mem_writed(address+4,*(data+1));
+	mem_writed_inline(address,*data);
+	mem_writed_inline(address+4,*(data+1));
 	cpu.mpl=03;
 }
 
