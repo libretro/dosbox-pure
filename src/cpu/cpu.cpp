@@ -2146,12 +2146,14 @@ bool CPU_CPUID(void) {
 			reg_ebx=0;			/* Not Supported */
 			reg_ecx=0;			/* No features */
 			reg_edx=0x00000011;	/* FPU+TimeStamp/RDTSC */
+			reg_edx|=0x100;		/* CMPXCHG8B */
 #if C_MMX
 		} else if (CPU_ArchitectureType==CPU_ARCHTYPE_PENTIUM_MMX) {
 			reg_eax=0x543;		/* intel pentium mmx (PMMX) */
 			reg_ebx=0;			/* Not Supported */
 			reg_ecx=0;			/* No features */
 			reg_edx=0x00800011;	/* FPU+TimeStamp/RDTSC+MMX */
+			reg_edx|=0x100;		/* CMPXCHG8B */
 #endif
 		} else {
 			return false;
@@ -2952,4 +2954,30 @@ const char* DBP_CPU_GetDecoderName()
 	DBP_SERIALIZE_EXTERN_POINTER_LIST(CPU_DecoderPtr, Paging);
 	if (cpudecoder == DBPSerializeCPU_DecoderPtrPagingPtrs[0]) return "PageFault";
 	return "???";
+}
+
+//DBP: Added Pentium CMPXCHG8B emulation from DOSBox-X by Jonathan Campbell
+//     Source: https://github.com/joncampbell123/dosbox-x/commit/e7d82fc
+//     Source: https://github.com/joncampbell123/dosbox-x/commit/03f04db
+void CPU_CMPXCHG8B(PhysPt eaa) {
+	uint32_t hi,lo;
+
+	/* NTS: We assume that, if reading doesn't cause a page fault, writing won't either */
+	lo = (uint32_t)mem_readd(eaa);
+	hi = (uint32_t)mem_readd(eaa+(PhysPt)4);
+
+	/* Compare EDX:EAX with 64-bit DWORD at memaddr 'eaa'.
+	 * if they match, ZF=1 and write ECX:EBX to memaddr 'eaa'.
+	 * else, ZF=0 and load memaddr 'eaa' into EDX:EAX */
+	FillFlags();
+	if (reg_edx == hi && reg_eax == lo) {
+		mem_writed(eaa,          reg_ebx);
+		mem_writed(eaa+(PhysPt)4,reg_ecx);
+		SETFLAGBIT(ZF,true);
+	}
+	else {
+		SETFLAGBIT(ZF,false);
+		reg_eax = lo;
+		reg_edx = hi;
+	}
 }
