@@ -360,8 +360,8 @@ struct fatFromDOSDrive
 					const bool isLongFileName = (!dot && !dotdot && !(dta_attr & DOS_ATTR_VOLUME) && ffdd.drive->GetLongFileName(f.path, longname));
 					if (isLongFileName)
 					{
-						size_t lfnlen = 0;
-						const Bit8u *plfn = (Bit8u*)longname, *lfn_end = plfn + lfnlen;
+						size_t lfnlen = 0, lfncount;
+						const Bit8u *lfn_begin = (Bit8u*)longname, *lfn_end = lfn_begin + lfnlen, *plfn;
 						for (; *lfn_end; lfnlen++) { while ((*(++lfn_end) & 0xC0) == 0x80) { } }
 						for (size_t i = 0, lfnblocks = (lfnlen + 12) / 13; i != lfnblocks; i++)
 						{
@@ -370,6 +370,7 @@ struct fatFromDOSDrive
 							le->attrib = DOS_ATTR_LONG_NAME;
 							le->type = 0;
 							le->loFirstClust = 0;
+							for (plfn = lfn_begin, lfncount = (lfnblocks - i - 1) * 13; lfncount; lfncount--) { while ((*(++plfn) & 0xC0) == 0x80) { } }
 							for (int j = 0; j != 13; j++)
 							{
 								Bit8u* p = le->Name(j);
